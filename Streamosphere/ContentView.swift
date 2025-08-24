@@ -26,6 +26,7 @@ struct ContentView: View {
     static let playOnOpenKey = "playOnAppOpen"
     static let retryTimeoutKey = "retryTimeout"
     static let lastStreamURLKey = "lastStreamURL"
+    static let autoResumeKey = "autoResume"
 
     @StateObject private var viewModel = StreamViewModel()
     @State private var showingSettings = false
@@ -64,10 +65,12 @@ struct ContentView: View {
                 SettingsView(
                     isPlayingOnOpen: $viewModel.isPlayingOnOpen,
                     retryTimeout: $viewModel.retryTimeout,
+                    autoResume: $viewModel.autoResume,
                     onRetryTimeoutChanged: {
                         viewModel.updateSettings(
                             isPlayingOnOpen: viewModel.isPlayingOnOpen,
-                            retryTimeout: viewModel.retryTimeout
+                            retryTimeout: viewModel.retryTimeout,
+                            autoResume: viewModel.autoResume
                         )
                     }
                 )

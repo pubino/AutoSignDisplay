@@ -12,6 +12,7 @@ class StreamViewModel: ObservableObject {
     @Published var streamURL: String
     @Published var isPlayingOnOpen: Bool
     @Published var retryTimeout: Double
+    @Published var autoResume: Bool
     @Published var player: AVPlayer?
 
     private var retryTimer: Timer?
@@ -22,13 +23,16 @@ class StreamViewModel: ObservableObject {
         self.isPlayingOnOpen = defaults.bool(forKey: ContentView.playOnOpenKey)
         let timeout = defaults.double(forKey: ContentView.retryTimeoutKey)
         self.retryTimeout = timeout == 0 ? 5.0 : timeout
+        self.autoResume = defaults.bool(forKey: ContentView.autoResumeKey)
     }
 
-    func updateSettings(isPlayingOnOpen: Bool, retryTimeout: Double) {
+    func updateSettings(isPlayingOnOpen: Bool, retryTimeout: Double, autoResume: Bool) {
         self.isPlayingOnOpen = isPlayingOnOpen
         self.retryTimeout = retryTimeout
+        self.autoResume = autoResume
         UserDefaults.standard.set(isPlayingOnOpen, forKey: ContentView.playOnOpenKey)
         UserDefaults.standard.set(retryTimeout, forKey: ContentView.retryTimeoutKey)
+        UserDefaults.standard.set(autoResume, forKey: ContentView.autoResumeKey)
         restartRetryTimer()
     }
 
@@ -66,8 +70,9 @@ class StreamViewModel: ObservableObject {
         guard retryTimer == nil else { return }
         retryTimer = Timer.scheduledTimer(withTimeInterval: retryTimeout, repeats: true) { _ in
             DispatchQueue.main.async {
-                if self.player?.currentItem == nil, let url = URL(string: self.streamURL) {
-                    print("Retrying stream: \(self.streamURL)")
+                // Only attempt to auto-resume if enabled
+                if self.autoResume, self.player?.currentItem == nil, let url = URL(string: self.streamURL) {
+                    print("Auto-resuming stream: \(self.streamURL)")
                     self.player = AVPlayer(url: url)
                     if self.isPlayingOnOpen {
                         self.player?.play()

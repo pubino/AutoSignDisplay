@@ -11,6 +11,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var isPlayingOnOpen: Bool
     @Binding var retryTimeout: Double
+    @Binding var autoResume: Bool
     var onRetryTimeoutChanged: () -> Void
 
     var body: some View {
@@ -19,6 +20,12 @@ struct SettingsView: View {
                 Toggle("Play on App Open", isOn: $isPlayingOnOpen)
                     .onChange(of: isPlayingOnOpen) { newValue in
                         UserDefaults.standard.set(newValue, forKey: ContentView.playOnOpenKey)
+                        onRetryTimeoutChanged()
+                    }
+
+                Toggle("Auto Resume on Network Interrupt", isOn: $autoResume)
+                    .onChange(of: autoResume) { newValue in
+                        UserDefaults.standard.set(newValue, forKey: ContentView.autoResumeKey)
                         onRetryTimeoutChanged()
                     }
 

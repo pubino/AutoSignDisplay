@@ -10,6 +10,7 @@ struct AppConfigKeys {
     static let playOnOpen = "PlayOnAppOpen"
     static let retryTimeout = "RetryTimeout"
     static let streamURL = "StreamURL"
+    static let autoResume = "AutoResume"
 }
 
 class AppConfig {
@@ -27,6 +28,11 @@ class AppConfig {
         if let retryTimeoutValue = managedConfig[AppConfigKeys.retryTimeout] as? Double {
             UserDefaults.standard.set(retryTimeoutValue, forKey: ContentView.retryTimeoutKey)
             print("Applied managed RetryTimeout: \(retryTimeoutValue)")
+        }
+
+        if let autoResumeValue = managedConfig[AppConfigKeys.autoResume] as? Bool {
+            UserDefaults.standard.set(autoResumeValue, forKey: ContentView.autoResumeKey)
+            print("Applied managed AutoResume: \(autoResumeValue)")
         }
 
         if let streamURLValue = managedConfig[AppConfigKeys.streamURL] as? String {
