@@ -13,6 +13,7 @@ class StreamViewModel: ObservableObject {
     @Published var isPlayingOnOpen: Bool
     @Published var retryTimeout: Double
     @Published var autoResume: Bool
+    @Published var settingsDisabled: Bool
     @Published var player: AVPlayer?
 
     private var retryTimer: Timer?
@@ -24,15 +25,18 @@ class StreamViewModel: ObservableObject {
         let timeout = defaults.double(forKey: ContentView.retryTimeoutKey)
         self.retryTimeout = timeout == 0 ? 5.0 : timeout
         self.autoResume = defaults.bool(forKey: ContentView.autoResumeKey)
+    self.settingsDisabled = defaults.bool(forKey: ContentView.settingsDisabledKey)
     }
 
-    func updateSettings(isPlayingOnOpen: Bool, retryTimeout: Double, autoResume: Bool) {
+    func updateSettings(isPlayingOnOpen: Bool, retryTimeout: Double, autoResume: Bool, settingsDisabled: Bool = false) {
         self.isPlayingOnOpen = isPlayingOnOpen
         self.retryTimeout = retryTimeout
         self.autoResume = autoResume
+        self.settingsDisabled = settingsDisabled
         UserDefaults.standard.set(isPlayingOnOpen, forKey: ContentView.playOnOpenKey)
         UserDefaults.standard.set(retryTimeout, forKey: ContentView.retryTimeoutKey)
         UserDefaults.standard.set(autoResume, forKey: ContentView.autoResumeKey)
+        UserDefaults.standard.set(settingsDisabled, forKey: ContentView.settingsDisabledKey)
         restartRetryTimer()
     }
 

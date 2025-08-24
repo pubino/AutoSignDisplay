@@ -11,11 +11,12 @@ struct AppConfigKeys {
     static let retryTimeout = "RetryTimeout"
     static let streamURL = "StreamURL"
     static let autoResume = "AutoResume"
+    static let settingsDisabled = "SettingsDisabled"
 }
 
 class AppConfig {
     static func applyConfiguration() {
-        guard let managedConfig = UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed") as? [String: Any] else {
+    guard let managedConfig = UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed") else {
             print("No managed configuration found.")
             return
         }
@@ -34,6 +35,11 @@ class AppConfig {
             UserDefaults.standard.set(autoResumeValue, forKey: ContentView.autoResumeKey)
             print("Applied managed AutoResume: \(autoResumeValue)")
         }
+
+            if let settingsDisabledValue = managedConfig[AppConfigKeys.settingsDisabled] as? Bool {
+                UserDefaults.standard.set(settingsDisabledValue, forKey: ContentView.settingsDisabledKey)
+                print("Applied managed SettingsDisabled: \(settingsDisabledValue)")
+            }
 
         if let streamURLValue = managedConfig[AppConfigKeys.streamURL] as? String {
             UserDefaults.standard.set(streamURLValue, forKey: ContentView.lastStreamURLKey)
