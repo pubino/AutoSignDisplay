@@ -7,6 +7,7 @@
 
 import Foundation
 import AVKit
+import Combine
 
 class StreamViewModel: ObservableObject {
     static let maxChannelPresets = 20
@@ -28,10 +29,19 @@ class StreamViewModel: ObservableObject {
     @Published var defaultChannelURL: String?
     @Published var player: AVPlayer?
 
+    /// Current retry attempt count (resets on successful playback).
+    @Published var retryCount: Int = 0
+    /// Maximum retry attempts before giving up (0 = unlimited).
+    @Published var maxRetries: Int = 0
+
     private var retryTimer: Timer?
+    private var playerObservers: [NSObjectProtocol] = []
+    private var statusObservation: NSKeyValueObservation?
+    private var rateObservation: NSKeyValueObservation?
+    private var defaultsObserver: NSObjectProtocol?
 
     // Inject a logger for easier testing. Defaults to printing to stdout.
-    private let logger: Logger
+    let logger: Logger
 
     init(logger: Logger = PrintLogger()) {
         let defaults = UserDefaults.standard
@@ -45,7 +55,7 @@ class StreamViewModel: ObservableObject {
         self.streamURL = defaults.string(forKey: ContentView.lastStreamURLKey) ?? ""
         self.isPlayingOnOpen = defaults.bool(forKey: ContentView.playOnOpenKey)
         let timeout = defaults.double(forKey: ContentView.retryTimeoutKey)
-        self.retryTimeout = timeout == 0 ? 5.0 : timeout
+        self.retryTimeout = timeout > 0 ? timeout : 5.0
         self.autoResume = defaults.bool(forKey: ContentView.autoResumeKey)
         self.settingsDisabled = defaults.bool(forKey: ContentView.settingsDisabledKey)
 
@@ -95,7 +105,84 @@ class StreamViewModel: ObservableObject {
             self.selectedPresetIndex = nil
             defaults.removeObject(forKey: ContentView.selectedPresetIndexKey)
         }
+
+        // Observe UserDefaults changes so managed config updates propagate at runtime
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.reloadManagedSettingsIfNeeded()
+        }
     }
+
+    deinit {
+        if let obs = defaultsObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        tearDownPlayerObservers()
+    }
+
+    // MARK: - Reload from UserDefaults (Issue #1)
+
+    /// Re-read settings from UserDefaults. Called when managed config may have changed.
+    func reloadManagedSettingsIfNeeded() {
+        let defaults = UserDefaults.standard
+
+        let newStreamURL = defaults.string(forKey: ContentView.lastStreamURLKey) ?? ""
+        let newPlayOnOpen = defaults.bool(forKey: ContentView.playOnOpenKey)
+        let newTimeout = defaults.double(forKey: ContentView.retryTimeoutKey)
+        let effectiveTimeout = newTimeout > 0 ? newTimeout : 5.0
+        let newAutoResume = defaults.bool(forKey: ContentView.autoResumeKey)
+        let newSettingsDisabled = defaults.bool(forKey: ContentView.settingsDisabledKey)
+        let newManaged = defaults.bool(forKey: ContentView.channelPresetsManagedKey)
+
+        var changed = false
+
+        if streamURL != newStreamURL {
+            streamURL = newStreamURL
+            changed = true
+        }
+        if isPlayingOnOpen != newPlayOnOpen {
+            isPlayingOnOpen = newPlayOnOpen
+            changed = true
+        }
+        if retryTimeout != effectiveTimeout {
+            retryTimeout = effectiveTimeout
+            restartRetryTimer()
+            changed = true
+        }
+        if autoResume != newAutoResume {
+            autoResume = newAutoResume
+            changed = true
+        }
+        if settingsDisabled != newSettingsDisabled {
+            settingsDisabled = newSettingsDisabled
+            changed = true
+        }
+        if channelPresetsManaged != newManaged {
+            channelPresetsManaged = newManaged
+            changed = true
+        }
+
+        let newPresets = defaults.stringArray(forKey: ContentView.channelPresetsKey) ?? []
+        if channelPresets != newPresets, !newPresets.isEmpty {
+            channelPresets = newPresets
+            changed = true
+        }
+
+        let newIndex = defaults.object(forKey: ContentView.selectedPresetIndexKey) as? Int
+        if selectedPresetIndex != newIndex {
+            selectedPresetIndex = newIndex
+            changed = true
+        }
+
+        if changed {
+            logger.log("Reloaded settings from UserDefaults")
+        }
+    }
+
+    // MARK: - Settings
 
     func updateSettings(isPlayingOnOpen: Bool, retryTimeout: Double, autoResume: Bool, settingsDisabled: Bool = false) {
         self.isPlayingOnOpen = isPlayingOnOpen
@@ -108,6 +195,8 @@ class StreamViewModel: ObservableObject {
         UserDefaults.standard.set(settingsDisabled, forKey: ContentView.settingsDisabledKey)
         restartRetryTimer()
     }
+
+    // MARK: - Stream URL
 
     func updateStreamURL(_ url: String, selectedPresetIndex: Int? = nil) {
         self.streamURL = url
@@ -122,6 +211,8 @@ class StreamViewModel: ObservableObject {
         }
         persistSelectedPresetIndex()
     }
+
+    // MARK: - Presets
 
     func selectPreset(at index: Int) {
         guard channelPresets.indices.contains(index) else { return }
@@ -164,45 +255,143 @@ class StreamViewModel: ObservableObject {
         !channelPresetsManaged && channelPresets.count < StreamViewModel.maxChannelPresets
     }
 
+    /// Extract a display name from a stream URL (hostname or last path component).
+    func displayName(for url: String) -> String {
+        guard let parsed = URL(string: url), let host = parsed.host else { return url }
+        let path = parsed.lastPathComponent
+        if !path.isEmpty, path != "/" {
+            return "\(host)/\(path)"
+        }
+        return host
+    }
+
+    // MARK: - Playback
+
     func playStream() {
         guard let url = URL(string: streamURL) else { return }
+        tearDownPlayerObservers()
         player = AVPlayer(url: url)
         player?.play()
+        retryCount = 0
+        setupPlayerObservers()
     }
 
     func startStreamIfNeeded() {
         guard let url = URL(string: streamURL) else { return }
+        tearDownPlayerObservers()
         player = AVPlayer(url: url)
         if isPlayingOnOpen {
             player?.play()
         }
+        retryCount = 0
+        setupPlayerObservers()
         startRetryTimer()
     }
+
+    // MARK: - Retry Timer (Issue #2)
 
     func stopRetryTimer() {
         retryTimer?.invalidate()
         retryTimer = nil
     }
 
-    private func restartRetryTimer() {
+    func restartRetryTimer() {
         stopRetryTimer()
         startRetryTimer()
     }
 
-    private func startRetryTimer() {
+    func startRetryTimer() {
         guard retryTimer == nil else { return }
-        retryTimer = Timer.scheduledTimer(withTimeInterval: retryTimeout, repeats: true) { _ in
+        retryTimer = Timer.scheduledTimer(withTimeInterval: retryTimeout, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
-                // Only attempt to auto-resume if enabled
-                if self.autoResume, self.player?.currentItem == nil, let url = URL(string: self.streamURL) {
-                    self.logger.log("Auto-resuming stream: \(self.streamURL)")
-                    self.player = AVPlayer(url: url)
-                    if self.isPlayingOnOpen {
-                        self.player?.play()
-                    }
+                self?.attemptRetry()
+            }
+        }
+    }
+
+    /// Core retry logic: checks player state and recreates if needed.
+    private func attemptRetry() {
+        guard autoResume else { return }
+
+        // Check if we've exceeded max retries (0 = unlimited)
+        if maxRetries > 0, retryCount >= maxRetries {
+            logger.log("Max retries (\(maxRetries)) reached for stream: \(streamURL)")
+            stopRetryTimer()
+            return
+        }
+
+        let needsRetry: Bool
+        if player == nil {
+            needsRetry = true
+        } else if player?.currentItem == nil {
+            needsRetry = true
+        } else if player?.currentItem?.status == .failed {
+            needsRetry = true
+        } else if player?.status == .failed {
+            needsRetry = true
+        } else {
+            needsRetry = false
+        }
+
+        guard needsRetry, let url = URL(string: streamURL) else { return }
+
+        retryCount += 1
+        logger.log("Auto-resuming stream (attempt \(retryCount)): \(streamURL)")
+        tearDownPlayerObservers()
+        player = AVPlayer(url: url)
+        if isPlayingOnOpen {
+            player?.play()
+        }
+        setupPlayerObservers()
+    }
+
+    // MARK: - Player Observation (Issue #2)
+
+    private func setupPlayerObservers() {
+        guard let player = player else { return }
+
+        // Observe player item failure notification
+        let failObs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { [weak self] notification in
+            let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+            self?.logger.log("Player item failed: \(error?.localizedDescription ?? "unknown error")")
+        }
+        playerObservers.append(failObs)
+
+        // Observe player item reaching end
+        let endObs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { [weak self] _ in
+            self?.logger.log("Stream playback ended")
+        }
+        playerObservers.append(endObs)
+
+        // KVO on player status
+        statusObservation = player.observe(\.status, options: [.new]) { [weak self] player, _ in
+            DispatchQueue.main.async {
+                if player.status == .failed {
+                    self?.logger.log("Player status failed: \(player.error?.localizedDescription ?? "unknown")")
+                } else if player.status == .readyToPlay {
+                    self?.retryCount = 0
                 }
             }
         }
+    }
+
+    private func tearDownPlayerObservers() {
+        for obs in playerObservers {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        playerObservers.removeAll()
+        statusObservation?.invalidate()
+        statusObservation = nil
+        rateObservation?.invalidate()
+        rateObservation = nil
     }
 
     // Exposed for testing: emit the same auto-resume log message so tests can
@@ -210,6 +399,8 @@ class StreamViewModel: ObservableObject {
     func emitAutoResumeLogForTesting() {
         logger.log("Auto-resuming stream: \(self.streamURL)")
     }
+
+    // MARK: - Persistence
 
     private func persistChannelPresets() {
         UserDefaults.standard.set(channelPresets, forKey: ContentView.channelPresetsKey)

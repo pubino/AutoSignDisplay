@@ -55,6 +55,8 @@ struct AutostreamTests {
         func log(_ message: String) {}
     }
 
+    // MARK: - Playback Creation Tests
+
     @Test func startStreamOnOpenUsesSelectedPreset() async throws {
         await resetDefaults()
 
@@ -145,6 +147,8 @@ struct AutostreamTests {
 
         viewModel.stopRetryTimer()
     }
+
+    // MARK: - Preset Persistence Tests
 
     @Test func presetSelectionPersistsAcrossReopen() async throws {
         await resetDefaults()
@@ -550,6 +554,129 @@ struct AutostreamTests {
         // Verify still 2 presets and still managed
         #expect(vm.channelPresets.count == 2)
         #expect(vm.channelPresetsManaged == true)
+
+        vm.stopRetryTimer()
+    }
+
+    // MARK: - AppConfig Reload Tests (Issue #1)
+
+    @Test func viewModelReloadsWhenDefaultsChange() async throws {
+        await resetDefaults()
+
+        let defaults = UserDefaults.standard
+        defaults.set("https://example.com/initial.m3u8", forKey: ContentView.lastStreamURLKey)
+        defaults.set(5.0, forKey: ContentView.retryTimeoutKey)
+
+        let vm = StreamViewModel(logger: TestLogger())
+
+        #expect(vm.streamURL == "https://example.com/initial.m3u8")
+        #expect(vm.retryTimeout == 5.0)
+
+        // Simulate managed config applying new values (as AppConfig would)
+        await MainActor.run {
+            defaults.set("https://example.com/updated.m3u8", forKey: ContentView.lastStreamURLKey)
+            defaults.set(10.0, forKey: ContentView.retryTimeoutKey)
+            vm.reloadManagedSettingsIfNeeded()
+        }
+
+        #expect(vm.streamURL == "https://example.com/updated.m3u8")
+        #expect(vm.retryTimeout == 10.0)
+
+        vm.stopRetryTimer()
+    }
+
+    @Test func viewModelHonorsAppConfigOnInit() async throws {
+        await resetDefaults()
+
+        let defaults = UserDefaults.standard
+
+        // Simulate what AppConfig.applyConfiguration does
+        defaults.set("https://managed.example.com/stream.m3u8", forKey: ContentView.lastStreamURLKey)
+        defaults.set(15.0, forKey: ContentView.retryTimeoutKey)
+        defaults.set(true, forKey: ContentView.playOnOpenKey)
+        defaults.set(true, forKey: ContentView.autoResumeKey)
+
+        let vm = StreamViewModel(logger: TestLogger())
+
+        #expect(vm.streamURL == "https://managed.example.com/stream.m3u8")
+        #expect(vm.retryTimeout == 15.0)
+        #expect(vm.isPlayingOnOpen == true)
+        #expect(vm.autoResume == true)
+
+        vm.stopRetryTimer()
+    }
+
+    // MARK: - Retry Logic Tests (Issue #2)
+
+    @Test func retryCountResetsOnNewStream() async throws {
+        await resetDefaults()
+
+        let defaults = UserDefaults.standard
+        defaults.set("https://example.com/stream.m3u8", forKey: ContentView.lastStreamURLKey)
+        defaults.set(true, forKey: ContentView.autoResumeKey)
+
+        let vm = StreamViewModel(logger: TestLogger())
+        vm.retryCount = 5
+
+        // Starting a new stream should reset retry count
+        vm.startStreamIfNeeded()
+
+        #expect(vm.retryCount == 0)
+        #expect(vm.player != nil)
+
+        vm.stopRetryTimer()
+    }
+
+    @Test func maxRetriesDefaultsToUnlimited() async throws {
+        await resetDefaults()
+
+        let vm = StreamViewModel(logger: TestLogger())
+        #expect(vm.maxRetries == 0)
+
+        vm.stopRetryTimer()
+    }
+
+    @Test func playStreamResetsRetryCount() async throws {
+        await resetDefaults()
+
+        let defaults = UserDefaults.standard
+        defaults.set("https://example.com/stream.m3u8", forKey: ContentView.lastStreamURLKey)
+
+        let vm = StreamViewModel(logger: TestLogger())
+        vm.retryCount = 3
+        vm.playStream()
+
+        #expect(vm.retryCount == 0)
+        #expect(vm.player != nil)
+
+        vm.stopRetryTimer()
+    }
+
+    // MARK: - Display Name Tests (Issue #4)
+
+    @Test func displayNameExtractsHostAndPath() async throws {
+        let vm = StreamViewModel(logger: TestLogger())
+
+        let name = vm.displayName(for: "https://example.com/stream.m3u8")
+        #expect(name == "example.com/stream.m3u8")
+
+        let hostOnly = vm.displayName(for: "https://example.com/")
+        #expect(hostOnly == "example.com")
+
+        let invalid = vm.displayName(for: "not a url")
+        #expect(invalid == "not a url")
+
+        vm.stopRetryTimer()
+    }
+
+    @Test func displayNameHandlesComplexURLs() async throws {
+        let vm = StreamViewModel(logger: TestLogger())
+
+        let mux = vm.displayName(for: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")
+        #expect(mux == "test-streams.mux.dev/x36xhzz.m3u8")
+
+        let empty = vm.displayName(for: "")
+        #expect(empty == "")
 
         vm.stopRetryTimer()
     }

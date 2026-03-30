@@ -48,22 +48,13 @@ struct ContentView: View {
     @StateObject private var viewModel = StreamViewModel()
     @State private var activeSheet: SheetDestination?
     @State private var showPlayer = false
-    @State private var presentationFailed = false
+    @State private var presentationAttempts = 0
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Simple banner shown when presentation fails and a retry was scheduled
-                    if presentationFailed {
-                        Text("Failed to present player — retrying...")
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.red)
-                            .cornerRadius(6)
-                    }
-
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Selected Stream")
                             .font(.headline)
@@ -80,8 +71,8 @@ struct ContentView: View {
                         .padding(.vertical, 8)
 
                         Button {
-                            if let url = URL(string: viewModel.streamURL) {
-                                viewModel.player = AVPlayer(url: url)
+                            if let _ = URL(string: viewModel.streamURL) {
+                                viewModel.playStream()
                                 showPlayer = true
                             }
                         } label: {
@@ -107,9 +98,14 @@ struct ContentView: View {
                                         viewModel.selectPreset(at: index)
                                     } label: {
                                         HStack {
-                                            Text(preset.isEmpty ? "Preset \(index + 1)" : preset)
-                                                .lineLimit(1)
-                                                .truncationMode(.middle)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Preset \(index + 1)")
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
+                                                Text(preset.isEmpty ? "(empty)" : viewModel.displayName(for: preset))
+                                                    .lineLimit(1)
+                                                    .truncationMode(.middle)
+                                            }
                                             if viewModel.selectedPresetIndex == index {
                                                 Spacer()
                                                 Image(systemName: "checkmark.circle.fill")
@@ -207,40 +203,40 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Auto-play fullscreen presentation (Issue #3)
+
 private extension ContentView {
+    static let maxPresentationAttempts = 3
+    static let presentationRetryDelay: TimeInterval = 1.0
+
     @MainActor
     func scheduleAutoPlayPresentation() {
-        DispatchQueue.main.async {
-            guard viewModel.isPlayingOnOpen, let _ = URL(string: viewModel.streamURL) else {
-                return
-            }
+        guard viewModel.isPlayingOnOpen, !viewModel.streamURL.isEmpty else { return }
+        presentationAttempts = 0
+        attemptPresentation()
+    }
 
-            if viewModel.player == nil || viewModel.player?.currentItem == nil {
-                viewModel.playStream()
-            } else {
-                viewModel.player?.play()
-            }
+    @MainActor
+    func attemptPresentation() {
+        guard viewModel.isPlayingOnOpen, !showPlayer else { return }
+        guard presentationAttempts < Self.maxPresentationAttempts else {
+            viewModel.logger.log("Auto-play presentation failed after \(Self.maxPresentationAttempts) attempts")
+            return
+        }
 
-            guard let player = viewModel.player else {
-                presentationFailed = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    if viewModel.player == nil || viewModel.player?.currentItem == nil {
-                        viewModel.playStream()
-                    }
-                    if viewModel.player != nil {
-                        showPlayer = true
-                        presentationFailed = false
-                    }
-                }
-                return
-            }
+        presentationAttempts += 1
 
-            if showPlayer {
-                player.play()
-                presentationFailed = false
-            } else {
-                showPlayer = true
-                presentationFailed = false
+        // Ensure player is ready
+        if viewModel.player == nil || viewModel.player?.currentItem == nil {
+            viewModel.playStream()
+        }
+
+        if viewModel.player != nil, viewModel.player?.currentItem != nil {
+            showPlayer = true
+        } else {
+            // Retry after a delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.presentationRetryDelay) {
+                self.attemptPresentation()
             }
         }
     }
