@@ -111,6 +111,40 @@ For each:
    - *Archive* — platform tvOS, deployment preparation **App Store Connect**.
 4. **Post-action** — TestFlight, or App Store Connect distribution.
 
+### Deployment preparation is the setting that gets missed
+
+A new workflow defaults its Archive action to deployment preparation **None**, and the
+choice is a single radio group: *None* / *TestFlight (Internal Testing Only)* / *App Store
+Connect*. With **None**, the build signs an archive, reports success, and never uploads
+anything — the first symptom is an empty TestFlight tab for a workflow whose builds are
+all green. Pick **App Store Connect**: *TestFlight (Internal Testing Only)* delivers for
+internal testing but does not make the build selectable for review, and there is no
+combined option.
+
+An archive built with **None** cannot be delivered after the fact. Change the setting and
+run a new build.
+
+### Starting a build without matching the start condition
+
+Once the start condition is a tag pattern, a workflow will not fire for a tag that already
+exists — Xcode Cloud triggers on tag *creation*. Use **Start Build** on the workflow to run
+against any branch or tag on demand; it ignores start conditions. That is the way to
+re-run a release after fixing workflow configuration, rather than cutting a throwaway tag.
+
+## How a build reaches a submission
+
+There is no field linking the two. App Store Connect attaches an upload to an app record
+by **bundle identifier**, and to a version by **`MARKETING_VERSION`**. Both are per-target
+build settings, which is the whole reason the two identities must never share a bundle
+identifier.
+
+After upload: the build appears under **TestFlight → tvOS Builds** as *Processing*, then
+becomes selectable on the version page under **Build**, then **Add for Review**.
+
+A processed build that never appears on the version page is usually an unanswered export
+compliance question. Both targets set `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO`,
+so the prompt should not appear — if it does, that setting has been lost.
+
 ## What is and is not version-controlled
 
 Worth being clear about, given the intent to run this GitOps-style:
