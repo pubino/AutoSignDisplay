@@ -300,6 +300,19 @@ def check_project() -> None:
                      f"That flag selects which default channel list is compiled in, so the "
                      f"wrong value ships one identity's channels inside the other.")
 
+    # The os_log subsystem must be derived, not written out. A literal files one
+    # identity's logs under the other's name — which is how the public build ended up
+    # logging as edu.princeton.autosigndisplay, making the documented retrieval commands
+    # return nothing for it.
+    logger_source = code("Logger.swift")
+    if "Bundle.main.bundleIdentifier" not in logger_source:
+        fail("project", "Logger.swift should derive its os_log subsystem from "
+                        "Bundle.main.bundleIdentifier. A hardcoded subsystem sends one "
+                        "distribution identity's diagnostics to the other's name.")
+    for identity_bundle in APP_IDENTITIES.values():
+        if f'subsystem: "{identity_bundle}"' in logger_source:
+            fail("project", f"Logger.swift hardcodes the subsystem as {identity_bundle!r}.")
+
     # Xcode Cloud cannot build a scheme that is not shared, and target duplication leaves
     # the new one in xcuserdata. The failure looks like a workflow finding nothing to do.
     shared = REPO_ROOT / "AutoSignDisplay.xcodeproj" / "xcshareddata" / "xcschemes"

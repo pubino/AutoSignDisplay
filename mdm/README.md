@@ -22,7 +22,17 @@ Other MDMs use the same mechanism under different names — "Managed App Config"
 "App Configuration", "Managed Preferences". The payload format is identical
 because it is defined by Apple, not by the MDM.
 
-Bundle identifier: `edu.princeton.autosigndisplay`
+Bundle identifier — **and there are now two**, so the payload must name the right one
+or it silently does nothing:
+
+| Identity | Bundle identifier | Distribution |
+|---|---|---|
+| AutoSignDisplay | `edu.princeton.autosigndisplay` | Custom App (currently blocked) |
+| AutoStreamDisplay | `edu.princeton.autostreamdisplay` | App Store |
+
+Managed app configuration is delivered per bundle identifier. Targeting the wrong one
+produces no error anywhere — the app simply reports "No managed configuration found" and
+falls back to its built-in defaults.
 
 Do **not** wrap the dictionary in a `com.apple.configuration.managed` key. The
 platform supplies that wrapper; the app reads it from `UserDefaults`. Your payload

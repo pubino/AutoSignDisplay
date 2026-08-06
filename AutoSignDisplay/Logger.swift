@@ -29,12 +29,21 @@ extension Logger {
 /// under `simctl launch --console-pty`. An unattended kiosk that cannot be asked what
 /// went wrong is the whole problem this app has to avoid.
 ///
-/// Retrieve with:
-///   xcrun simctl spawn <udid> log stream --predicate 'subsystem == "edu.princeton.autosigndisplay"'
-///   log show --last 30m --predicate 'subsystem == "edu.princeton.autosigndisplay"'   (on device)
+/// The subsystem is the bundle identifier, so each distribution identity logs under its
+/// own — `edu.princeton.autosigndisplay` for the private build, `…autostreamdisplay` for
+/// the public one. It was a hardcoded string until the second identity existed, at which
+/// point the public app logged under the private app's subsystem: the documented retrieval
+/// commands returned nothing for it, and on a device running both the two were
+/// indistinguishable.
+///
+/// Retrieve with, substituting the identity you want:
+///   xcrun simctl spawn <udid> log stream --predicate 'subsystem == "<bundle id>"'
+///   log show --last 30m --predicate 'subsystem == "<bundle id>"'   (on device)
 struct PrintLogger: Logger {
     private static let osLog = os.Logger(
-        subsystem: "edu.princeton.autosigndisplay",
+        // Derived, never written out: a literal here silently files one identity's logs
+        // under the other's name.
+        subsystem: Bundle.main.bundleIdentifier ?? "edu.princeton.autosigndisplay",
         category: "playback"
     )
 
