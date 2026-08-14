@@ -17,23 +17,45 @@ which is the copy that ships alongside the source.
 
 **Jamf Pro:** Devices → Mobile Device Apps → the app → **App Configuration**.
 
-Do not paste these files directly. Copy them through the helper:
+Do not paste these files directly — they lead with a comment block, and their job is to
+be read. Copy them through the helper:
 
 ```bash
-./scripts/mdm-payload.sh verify     # also: kiosk, full, or a path
+./scripts/mdm-payload.sh verify     # also: kiosk, full, probe, or a path
 ```
 
-The files here lead with a long comment block and carry no `DOCTYPE`, because their job
-is to be read. Jamf validates what you paste and rejects that shape with
-**`FIELD_CONFIGURATION_PLIST_INCORRECT_FORMAT`**. The helper runs the payload through
-`plutil -convert xml1`, which adds the `DOCTYPE`, strips the comments, and copies the
-result to the clipboard.
+It runs the payload through `plutil -convert xml1`, which strips comments and normalises
+the XML. That conversion is type-safe, which is not incidental: `<real>` stays real and
+Booleans stay `<true/>` rather than collapsing to `<integer>1</integer>`, which
+`AppConfig` rejects deliberately by checking `objCType == "c"`. Hand-retyping a payload
+to satisfy a validator is how that guard gets tripped in the field, and the symptom is a
+Boolean key that silently does nothing.
 
-The conversion is type-safe, which is not incidental here. `<real>` stays real and the
-Booleans stay `<true/>` rather than collapsing to `<integer>1</integer>` — which
-`AppConfig` rejects deliberately, by checking `objCType == "c"`. Hand-retyping a payload
-to satisfy Jamf's validator is the way that guard gets tripped in the field, and the
-symptom is a Boolean key that silently does nothing.
+### `FIELD_CONFIGURATION_PLIST_INCORRECT_FORMAT`
+
+Jamf rejects some payload shapes with this, and **which shapes is not documented**. Both
+the raw file and a canonical `plutil` conversion with a `DOCTYPE` have been rejected here,
+so neither comments nor the `DOCTYPE` is the whole story. Adding a `DOCTYPE` can itself be
+the cause — many XML parsers refuse one outright as XXE mitigation.
+
+Rather than guess, bisect. The helper emits variants:
+
+```bash
+./scripts/mdm-payload.sh probe --form dict      # smallest payload, no wrapper
+./scripts/mdm-payload.sh probe --form plist     # smallest payload, <plist> wrapper
+./scripts/mdm-payload.sh verify --form dict     # real payload, winning form
+./scripts/mdm-payload.sh verify --ascii         # em dash out of DisplayTitle
+```
+
+`probe` is one ASCII key, no `<real>`, no nesting — the least interesting payload that is
+still visible on screen. If **probe is accepted**, the format is settled and the problem is
+content: add keys back until it breaks. Suspects, in order — the em dash in `DisplayTitle`
+(`--ascii` removes it), `<real>` for `RetryTimeout`, and the nested `ChannelPresets` array.
+If **probe is rejected in every form**, the file is not the problem; check whether the
+field is in an XML mode at all, since some Jamf versions present a key/value table or a
+JSON-schema editor instead of a free-text plist box.
+
+Record the winning combination here once it is known.
 
 Other MDMs use the same mechanism under different names — "Managed App Config",
 "App Configuration", "Managed Preferences". The payload format is identical
