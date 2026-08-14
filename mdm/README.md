@@ -31,31 +31,36 @@ Booleans stay `<true/>` rather than collapsing to `<integer>1</integer>`, which
 to satisfy a validator is how that guard gets tripped in the field, and the symptom is a
 Boolean key that silently does nothing.
 
-### `FIELD_CONFIGURATION_PLIST_INCORRECT_FORMAT`
+### Jamf wants the `<dict>` alone
 
-Jamf rejects some payload shapes with this, and **which shapes is not documented**. Both
-the raw file and a canonical `plutil` conversion with a `DOCTYPE` have been rejected here,
-so neither comments nor the `DOCTYPE` is the whole story. Adding a `DOCTYPE` can itself be
-the cause — many XML parsers refuse one outright as XXE mitigation.
+**Confirmed against Jamf Pro, 2026-08-14.** The App Configuration field accepts the root
+`<dict>` and nothing around it:
 
-Rather than guess, bisect. The helper emits variants:
-
-```bash
-./scripts/mdm-payload.sh probe --form dict      # smallest payload, no wrapper
-./scripts/mdm-payload.sh probe --form plist     # smallest payload, <plist> wrapper
-./scripts/mdm-payload.sh verify --form dict     # real payload, winning form
-./scripts/mdm-payload.sh verify --ascii         # em dash out of DisplayTitle
+```xml
+<dict>
+	<key>DisplayTitle</key>
+	<string>MDM PROBE</string>
+</dict>
 ```
 
-`probe` is one ASCII key, no `<real>`, no nesting — the least interesting payload that is
-still visible on screen. If **probe is accepted**, the format is settled and the problem is
-content: add keys back until it breaks. Suspects, in order — the em dash in `DisplayTitle`
-(`--ascii` removes it), `<real>` for `RetryTimeout`, and the nested `ChannelPresets` array.
-If **probe is rejected in every form**, the file is not the problem; check whether the
-field is in an XML mode at all, since some Jamf versions present a key/value table or a
-JSON-schema editor instead of a free-text plist box.
+Any wrapper is rejected with `FIELD_CONFIGURATION_PLIST_INCORRECT_FORMAT` — the `<?xml?>`
+declaration, the `<plist>` element, and the `DOCTYPE` alike. Adding a `DOCTYPE` to satisfy
+the validator makes it worse, not better, which is worth knowing because it is the obvious
+thing to reach for: many XML parsers refuse a `DOCTYPE` outright as XXE mitigation.
 
-Record the winning combination here once it is known.
+`--form dict` is therefore the helper's default and the only form you should need. The
+others exist for bisecting a future Jamf version that changes its mind:
+
+```bash
+./scripts/mdm-payload.sh probe            # one ASCII key — is it format or content?
+./scripts/mdm-payload.sh verify --ascii   # em dash out of DisplayTitle
+./scripts/mdm-payload.sh verify --form plist
+```
+
+If a payload is ever rejected again, start with `probe`. Accepted means the format is fine
+and the problem is content — add keys back until it breaks, suspecting in order the em dash
+in `DisplayTitle`, `<real>` for `RetryTimeout`, and the nested `ChannelPresets` array.
+Rejected in every form means the file is not the problem at all.
 
 Other MDMs use the same mechanism under different names — "Managed App Config",
 "App Configuration", "Managed Preferences". The payload format is identical

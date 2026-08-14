@@ -16,9 +16,9 @@ set -euo pipefail
 #   ./scripts/mdm-payload.sh probe         # smallest legal payload, for bisecting
 #   ./scripts/mdm-payload.sh <path>        # any plist
 #
-#   --form full    <?xml?> + <!DOCTYPE> + <plist> + <dict>   (default)
+#   --form dict    <dict> only, no wrapper                   (default; what Jamf takes)
 #   --form plist   <?xml?> + <plist> + <dict>, no DOCTYPE
-#   --form dict    <dict> only, no wrapper
+#   --form full    <?xml?> + <!DOCTYPE> + <plist> + <dict>
 #   --ascii        replace non-ASCII characters with ASCII equivalents
 #   --stdout       print instead of copying
 #
@@ -29,7 +29,7 @@ set -euo pipefail
 MDM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../mdm" && pwd)"
 TO_STDOUT=0
 LABEL=""
-FORM="full"
+FORM="dict"
 ASCII=0
 NAME=""
 
