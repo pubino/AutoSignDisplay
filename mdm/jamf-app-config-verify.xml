@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  AutoSignDisplay — Managed App Configuration (first-install verification)
+  Managed App Configuration (first-install verification)
+
+  Applies to both identities — AutoSignDisplay (edu.princeton.autosigndisplay) and
+  AutoStreamDisplay (edu.princeton.autostreamdisplay). App Configuration is scoped to
+  an app in Jamf, so this payload carries no bundle identifier and is valid for either.
 
   Purpose: prove that managed configuration is reaching the app on a real
   MDM-managed Apple TV, before locking anything down. Deliberately NOT a kiosk
@@ -9,25 +13,39 @@
 
   How to read the result from across the room, with no logs and no console:
 
-    - The heading says "MDM VERIFY — <location>". If it says "AutoSignDisplay"
-      instead, the payload did not arrive.
+    - The heading says "MDM VERIFY — <location>". If instead it shows the app's own
+      name — "AutoSignDisplay" or "AutoStreamDisplay", whichever you installed, since
+      the fallback heading is CFBundleDisplayName — the payload did not arrive.
     - The Stream Presets list shows exactly two entries, "Verify Scenic" and
-      "Verify Announcements", rather than the app's four built-in channels (News,
-      News Plus, Scenic, Announcements).
+      "Verify Announcements", rather than the built-in defaults. Those differ by
+      identity: the private build ships four Princeton channels (News, News Plus,
+      Scenic, Announcements), the public build ships one, "Featured Event Stream".
     - The stream starts on its own, because PlayOnAppOpen is true.
     - Settings > Recovery shows Retry Timeout as 7s. That value is not one of the
-      six the on-device UI cycles through, so seeing it proves the number came from
-      the payload rather than from a local default.
+      six the on-device UI cycles through (3, 5, 10, 15, 30, 60), so seeing it proves
+      the number came from the payload rather than from a local default.
 
   The stream URLs are Princeton's own live channels, which redirect to Kaltura HLS
   manifests and need no credentials.
 
   Then apply jamf-app-config-kiosk.xml to test the locked-down configuration.
 
-  NOTE: the app reads managed configuration at launch. After changing this payload
-  in Jamf, force-quit the app (double-press TV, swipe up) or reboot the device —
-  otherwise nothing appears to happen. See "Applying a changed payload" in
-  README.md.
+  CHANGING THIS PAYLOAD — do not force-quit first. From 1.1 configuration is
+  declarative: the app reconciles while running, so editing the payload in Jamf and
+  waiting is itself the test. Expect the change within roughly RetryTimeout + 1.5s of
+  it landing on the device — about 9s with the 7s below — on top of however long Jamf
+  takes to push.
+
+  Force-quitting or rebooting also picks the change up, but it proves only that launch
+  reads the payload, which 1.0 already did. Reach for it as a fallback after a reconcile
+  has failed to happen, never as the first move — it destroys the evidence.
+
+  One precondition: the poll rides the playback watchdog's tick, which runs whenever a
+  player exists and the app is foregrounded — including while sitting on the channel
+  list. It does not run after someone has explicitly pressed Stop. Verify reconcile from
+  a playing or auto-playing state, which is also the only state a kiosk is ever in.
+
+  See "Applying a changed payload" in README.md.
 -->
 <plist version="1.0">
 <dict>
