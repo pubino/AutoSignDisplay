@@ -28,6 +28,7 @@ set -euo pipefail
 
 MDM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../mdm" && pwd)"
 TO_STDOUT=0
+LABEL=""
 FORM="full"
 ASCII=0
 NAME=""
@@ -68,7 +69,7 @@ case "$NAME" in
 </dict>
 </plist>
 PROBE
-    SRC="$TMP"
+    SRC="$TMP"; LABEL="probe"
     ;;
   "") echo "Which payload? verify | kiosk | full | probe | <path>" >&2; exit 2 ;;
   *)  SRC="$NAME" ;;
@@ -97,6 +98,6 @@ fi
 
 printf '%s\n' "$CANONICAL" | pbcopy
 KEYS="$(printf '%s\n' "$CANONICAL" | grep -cE '^[[:space:]]*<key>' || true)"
-echo "Copied $(basename "$SRC") — form=${FORM}$([[ $ASCII -eq 1 ]] && echo ", ascii")."
+echo "Copied ${LABEL:-$(basename "$SRC")} — form=${FORM}$([[ $ASCII -eq 1 ]] && echo ", ascii")."
 echo "${KEYS} keys total, comments stripped."
 echo "Paste into Jamf Pro > Devices > Mobile Device Apps > <app> > App Configuration."
