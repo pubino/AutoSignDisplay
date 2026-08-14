@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Managed App Configuration — Princeton production display
+
+  The four production channels, locked down: plays on launch, recovers from network
+  drops, preset list is the only affordance, no on-device settings at all.
+
+  Copy it in with `./scripts/mdm-payload.sh production` — Jamf takes the <dict> alone
+  and rejects the wrapper, so do not paste this file directly.
+
+  WHAT THE TWO LOCKS DO, because they are not interchangeable:
+
+    ViewOnlyMode      Reduces the main screen to the preset list. No URL entry, no
+                      Play/Clear, no Manage Stream Presets. Pressing a preset plays it
+                      immediately. On its own it deliberately LEAVES Settings reachable,
+                      so the mode can be switched off from the device.
+
+    SettingsDisabled  Disables the Settings link outright.
+
+  Setting both, as here, means there is no on-device recourse of any kind. That is the
+  intent for an unattended display, with one consequence worth stating plainly:
+
+  SettingsPIN IS INERT IN THIS COMBINATION. The PIN prompt lives inside the Settings
+  screen, and SettingsDisabled stops that screen being reachable, so the PIN can never be
+  entered. It is omitted here rather than set to a value that does nothing. If you want a
+  technician to be able to get in on site, drop SettingsDisabled and set SettingsPIN
+  instead — managed keys still cannot be edited, and a reconcile overwrites anything else
+  they change.
+
+  BEFORE APPLYING THIS, verify that a payload change reconciles while the app runs — test
+  2 in docs/HARDWARE-VERIFICATION.md, using jamf-app-config-verify.xml, which leaves the
+  UI open. Reconcile is the escape hatch this payload depends on, and as of 1.1 it has
+  never been observed against a real MDM write. If it turns out not to work, recovering a
+  display locked by this payload means a force-quit or unscoping the app.
+-->
+<plist version="1.0">
+<dict>
+  <!-- Name the actual display. Shown as the screen heading. -->
+  <key>DisplayTitle</key>
+  <string>Sherrerd Hall</string>
+
+  <key>PlayOnAppOpen</key>
+  <true/>
+
+  <key>AutoResume</key>
+  <true/>
+
+  <!-- Preset list is the only control. -->
+  <key>ViewOnlyMode</key>
+  <true/>
+
+  <!-- No Settings screen. See the note above about SettingsPIN. -->
+  <key>SettingsDisabled</key>
+  <true/>
+
+  <!-- One of the six values the UI offers, unlike the deliberately odd 7 in the verify
+       payload. Also sets the stall threshold, which is max(15, RetryTimeout * 3) — so 30s
+       here before a stalled stream is treated as needing a reload. -->
+  <key>RetryTimeout</key>
+  <real>10.0</real>
+
+  <key>ChannelPresets</key>
+  <array>
+    <dict>
+      <key>Name</key>
+      <string>News</string>
+      <key>URL</key>
+      <string>https://orfe.princeton.edu/live/news</string>
+    </dict>
+    <dict>
+      <key>Name</key>
+      <string>News Plus</string>
+      <key>URL</key>
+      <string>https://orfe.princeton.edu/live/news-plus</string>
+    </dict>
+    <dict>
+      <key>Name</key>
+      <string>Scenic</string>
+      <key>URL</key>
+      <string>https://orfe.princeton.edu/live/scenic</string>
+    </dict>
+    <dict>
+      <key>Name</key>
+      <string>Announcements</string>
+      <key>URL</key>
+      <string>https://orfe.princeton.edu/live/announcements</string>
+    </dict>
+  </array>
+
+  <!-- Must match one of the URLs above, or the display starts on nothing. Change this to
+       pick which channel a given display comes up on. -->
+  <key>DefaultChannel</key>
+  <string>https://orfe.princeton.edu/live/news</string>
+</dict>
+</plist>

@@ -11,7 +11,8 @@ set -euo pipefail
 #
 # Usage (runnable from any directory):
 #   ./scripts/mdm-payload.sh verify        # first-install verification
-#   ./scripts/mdm-payload.sh kiosk         # locked-down display
+#   ./scripts/mdm-payload.sh kiosk         # locked-down display (generic example)
+#   ./scripts/mdm-payload.sh production    # Princeton channels, fully locked
 #   ./scripts/mdm-payload.sh full          # full reference of every key
 #   ./scripts/mdm-payload.sh probe         # smallest legal payload, for bisecting
 #   ./scripts/mdm-payload.sh <path>        # any plist
@@ -55,6 +56,7 @@ trap 'rm -f "$TMP"' EXIT
 case "$NAME" in
   verify) SRC="$MDM_DIR/jamf-app-config-verify.xml" ;;
   kiosk)  SRC="$MDM_DIR/jamf-app-config-kiosk.xml" ;;
+  production) SRC="$MDM_DIR/jamf-app-config-production.xml" ;;
   full)   SRC="$MDM_DIR/jamf-app-config.xml" ;;
   probe)
     # Deliberately the least interesting payload that is still observable on screen:
@@ -71,7 +73,7 @@ case "$NAME" in
 PROBE
     SRC="$TMP"; LABEL="probe"
     ;;
-  "") echo "Which payload? verify | kiosk | full | probe | <path>" >&2; exit 2 ;;
+  "") echo "Which payload? verify | kiosk | production | full | probe | <path>" >&2; exit 2 ;;
   *)  SRC="$NAME" ;;
 esac
 

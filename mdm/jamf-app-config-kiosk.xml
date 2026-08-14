@@ -19,16 +19,20 @@
   <key>AutoResume</key>
   <true/>
 
+  <!-- Disables the Settings link outright. Note what this does to SettingsPIN, below. -->
   <key>SettingsDisabled</key>
   <true/>
 
-  <!-- Locked-down display: only the preset list is reachable, and Settings needs
-       a PIN. Drop ViewOnlyMode if a local user should be able to enter URLs. -->
+  <!-- Reduces the screen to the preset list. On its own it leaves Settings reachable, so
+       the mode can be switched off from the device; SettingsDisabled above removes that.
+       Drop ViewOnlyMode if a local user should be able to enter URLs. -->
   <key>ViewOnlyMode</key>
   <true/>
 
-  <key>SettingsPIN</key>
-  <string>482159</string>
+  <!-- SettingsPIN is deliberately NOT set here, and setting it would do nothing: the PIN
+       prompt lives inside the Settings screen, which SettingsDisabled makes unreachable.
+       For a PIN-gated display that a technician can still get into, drop SettingsDisabled
+       and set SettingsPIN instead. -->
 
   <key>RetryTimeout</key>
   <real>5.0</real>
