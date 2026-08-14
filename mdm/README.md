@@ -15,8 +15,25 @@ which is the copy that ships alongside the source.
 
 ## Applying it
 
-**Jamf Pro:** Devices → Mobile Device Apps → AutoSignDisplay → **App
-Configuration**, then paste the file's contents (including the `<dict>`).
+**Jamf Pro:** Devices → Mobile Device Apps → the app → **App Configuration**.
+
+Do not paste these files directly. Copy them through the helper:
+
+```bash
+./scripts/mdm-payload.sh verify     # also: kiosk, full, or a path
+```
+
+The files here lead with a long comment block and carry no `DOCTYPE`, because their job
+is to be read. Jamf validates what you paste and rejects that shape with
+**`FIELD_CONFIGURATION_PLIST_INCORRECT_FORMAT`**. The helper runs the payload through
+`plutil -convert xml1`, which adds the `DOCTYPE`, strips the comments, and copies the
+result to the clipboard.
+
+The conversion is type-safe, which is not incidental here. `<real>` stays real and the
+Booleans stay `<true/>` rather than collapsing to `<integer>1</integer>` — which
+`AppConfig` rejects deliberately, by checking `objCType == "c"`. Hand-retyping a payload
+to satisfy Jamf's validator is the way that guard gets tripped in the field, and the
+symptom is a Boolean key that silently does nothing.
 
 Other MDMs use the same mechanism under different names — "Managed App Config",
 "App Configuration", "Managed Preferences". The payload format is identical

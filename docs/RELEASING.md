@@ -162,14 +162,40 @@ real work for it to do.
 
 ## Build numbers
 
-Xcode Cloud exposes `CI_BUILD_NUMBER` and increments it per run. **Confirm on the
-first archive that the build number actually reaches the uploaded binary.** If App
-Store Connect reports a build number you did not expect, the fix is a
-`ci_pre_xcodebuild.sh` that writes `CI_BUILD_NUMBER` into the build settings.
+Xcode Cloud injects `CI_BUILD_NUMBER` and increments it per run. **Confirmed** on the
+public app: `CURRENT_PROJECT_VERSION` is `1` in the project, and uploads arrive numbered
+`3`, `4`, … So no `ci_pre_xcodebuild.sh` is needed, and the project value is inert for
+anything Xcode Cloud builds.
 
-The version string is `MARKETING_VERSION`, set per target and currently `1.1` for both.
-It must match the App Store Connect version record or the upload is rejected — and it is
-a per-target setting, so the two identities can diverge without touching the source.
+Counters are per workflow, so the two identities never collide.
+
+## Version trains close on approval
+
+`MARKETING_VERSION` is `CFBundleShortVersionString`, set per target. Once a version is
+**approved and released**, that train is closed permanently — any further upload against
+it is rejected:
+
+```
+ITMS-90186: Invalid Pre-Release Train — the train version '1.1' is closed
+ITMS-90062: CFBundleShortVersionString [1.1] must contain a higher version
+            than that of the previously approved version [1.1]
+```
+
+Both mean the same thing and neither harms the released app; the delivery is simply
+refused. Once deployment preparation is **App Store Connect**, *every* successful build
+attempts a delivery — so a Start Build or a tag push after a release earns this mail
+rather than doing nothing.
+
+The fix is a version bump, in this order:
+
+1. Raise `MARKETING_VERSION` on the target being released — **only that one**. It is a
+   per-target setting, which is what lets the two identities sit on different versions.
+2. Create the matching version record in App Store Connect. A build with no corresponding
+   record has nothing to attach to.
+3. Then build.
+
+Bump when there is something to release, not pre-emptively. A version number that does not
+correspond to a change is worse than none — it makes the next rejection harder to read.
 
 ## Submitting for review
 
