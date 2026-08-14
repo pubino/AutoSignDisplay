@@ -32,6 +32,23 @@
   UI open. Reconcile is the escape hatch this payload depends on, and as of 1.1 it has
   never been observed against a real MDM write. If it turns out not to work, recovering a
   display locked by this payload means a force-quit or unscoping the app.
+
+  EVERY CHANNEL HERE EXPIRES AFTER 24 HOURS OF CONTINUOUS PLAYBACK. All of them are
+  Kaltura-backed, and playManifest returns a master playlist whose variant URLs are
+  CloudFront-signed with a DateLessThan 24 hours out (verified 2026-08-14). An HLS client
+  refetches the *media* playlist continuously but the *master* only once, so once the
+  signature lapses those refetches start failing and the stream stalls where it is.
+
+  Recovering means building a new player item, which refetches the master and gets fresh
+  signatures — which is exactly what AutoResume's stall detection does, and exactly what
+  has never been observed working (issue #9).
+
+  The useful consequence: this is a scheduled, deterministic reproduction of the failure
+  that has been impossible to trigger on demand. Leave a display on one channel for over
+  24 hours. If it is still playing afterwards, recovery works. If it is frozen, #9 is
+  confirmed on hardware and this payload should not be deployed unattended until it is
+  fixed — a locked display with no on-device recourse would need a daily visit or a
+  Jamf-scheduled restart.
 -->
 <plist version="1.0">
 <dict>
@@ -84,6 +101,28 @@
       <string>Announcements</string>
       <key>URL</key>
       <string>https://orfe.princeton.edu/live/announcements</string>
+    </dict>
+    <dict>
+      <key>Name</key>
+      <string>Graduate</string>
+      <key>URL</key>
+      <string>https://orfe.princeton.edu/live/graduate</string>
+    </dict>
+    <!-- Undergraduate and Live Events are direct Kaltura entry URLs rather than
+         orfe.princeton.edu redirects. Worth knowing operationally: a redirect can be
+         repointed server-side, but an entry id baked into this payload needs a Jamf edit
+         and a reconcile on every display when the entry is replaced. -->
+    <dict>
+      <key>Name</key>
+      <string>Undergraduate</string>
+      <key>URL</key>
+      <string>https://cdnapi.kaltura.com/p/1449362/sp/144936200/playManifest/entryId/1_aewpakod/format/applehttp/protocol/https/a.m3u8</string>
+    </dict>
+    <dict>
+      <key>Name</key>
+      <string>Live Events</string>
+      <key>URL</key>
+      <string>https://cdnapi.kaltura.com/p/1449362/sp/144936200/playManifest/entryId/1_kt4nchs4/format/applehttp/protocol/https/a.m3u8</string>
     </dict>
   </array>
 
