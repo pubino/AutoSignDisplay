@@ -33,13 +33,17 @@ struct PlaybackRecoveryTests {
                          secondsSinceProgress: secondsSinceProgress)
     }
 
+    /// Defaults match the app's: Auto Resume as the managed payloads set it, and
+    /// Resume When Paused on, as it ships.
     private func decide(_ snapshot: PlaybackSnapshot,
                         autoResume: Bool = true,
+                        resumeWhenPaused: Bool = true,
                         stoppedByUser: Bool = false,
                         stallThreshold: TimeInterval = 15,
                         secondsSinceLastReload: TimeInterval = .infinity) -> PlaybackRecovery {
         StreamViewModel.recoveryDecision(for: snapshot,
                                          autoResume: autoResume,
+                                         resumeWhenPaused: resumeWhenPaused,
                                          stoppedByUser: stoppedByUser,
                                          stallThreshold: stallThreshold,
                                          secondsSinceLastReload: secondsSinceLastReload)
@@ -129,13 +133,62 @@ struct PlaybackRecoveryTests {
         #expect(decide(healthy(secondsSinceProgress: 14.9)) == .leaveAlone)
     }
 
-    @Test func aPlayerPausedByHandIsNotAStalledOne() {
+    @Test func aPlayerPausedByHandIsNotAStalledOneWhenResumeWhenPausedIsOff() {
         // Paused, but the item is ready and the buffer is not empty — somebody pressed
         // pause. Distinguished from a freeze by the item's health, because AVPlayer
-        // reports `.paused` for both.
+        // reports `.paused` for both. With the setting off, that pause is respected
+        // however long it lasts.
         var snapshot = healthy(secondsSinceProgress: 3600)
         snapshot.looksHealthyButIdle = true
+        #expect(decide(snapshot, resumeWhenPaused: false) == .leaveAlone)
+    }
+
+    // MARK: - Resume When Paused
+
+    @Test func aPausedStreamIsRebuiltOncePastTheThreshold() {
+        // The failure this setting exists for. A live stream whose playlist stopped
+        // handing out new segments was paused by AVFoundation itself, with a full
+        // buffer and a ready item - indistinguishable from a press of pause - and sat
+        // there until tvOS showed the screensaver.
+        var snapshot = healthy(secondsSinceProgress: 30)
+        snapshot.looksHealthyButIdle = true
+        #expect(decide(snapshot) == .reload(reason: "paused for 30s"))
+    }
+
+    @Test func aBriefPauseIsLeftAlone() {
+        // A viewer pausing for a moment is not repaired; only one that outlasts the
+        // same threshold a freeze has to.
+        var snapshot = healthy(secondsSinceProgress: 14.9)
+        snapshot.looksHealthyButIdle = true
         #expect(decide(snapshot) == .leaveAlone)
+    }
+
+    @Test func resumeWhenPausedDoesNothingWithoutAutoResume() {
+        var snapshot = healthy(secondsSinceProgress: 600)
+        snapshot.looksHealthyButIdle = true
+        #expect(decide(snapshot, autoResume: false, resumeWhenPaused: true) == .leaveAlone)
+    }
+
+    @Test func anExplicitStopOutranksResumeWhenPaused() {
+        var snapshot = healthy(secondsSinceProgress: 600)
+        snapshot.looksHealthyButIdle = true
+        #expect(decide(snapshot, stoppedByUser: true) == .leaveAlone)
+    }
+
+    @Test func aRebuiltPausedStreamIsStillGivenTimeToLoad() {
+        // The cooldown applies here too, or a stream that comes back paused would be
+        // rebuilt on every tick and never get the chance to start.
+        var snapshot = healthy(secondsSinceProgress: 600)
+        snapshot.looksHealthyButIdle = true
+        #expect(decide(snapshot, secondsSinceLastReload: 1) == .leaveAlone)
+    }
+
+    @Test func theSettingDoesNotChangeHowAFreezeIsHandled() {
+        // Off only means "respect a pause". A player that is NOT idle-but-healthy and
+        // has stopped moving is a freeze, and is repaired either way.
+        let frozen = healthy(secondsSinceProgress: 30)
+        #expect(decide(frozen, resumeWhenPaused: false) == .reload(reason: "stalled for 30s"))
+        #expect(decide(frozen, resumeWhenPaused: true) == .reload(reason: "stalled for 30s"))
     }
 
     @Test func aStreamNeverStartedIsNotAStalledOne() {

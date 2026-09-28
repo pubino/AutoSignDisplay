@@ -12,6 +12,10 @@
     <key>AutoResume</key>
     <true/>
 
+    <!-- False, because the app defaults to true: only false proves the key applied. -->
+    <key>ResumeWhenPaused</key>
+    <false/>
+
     <key>RetryTimeout</key>
     <real>5.0</real>
 

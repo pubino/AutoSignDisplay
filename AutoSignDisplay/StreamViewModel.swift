@@ -96,7 +96,8 @@ struct PlaybackSnapshot: Equatable {
     /// case to ignore with the case to repair.
     var intendsToPlay: Bool
     /// The player is idle but nothing is wrong with it — ready to play, buffer not
-    /// empty. That is a real pause, as opposed to a freeze.
+    /// empty. A press of pause looks like this, and so does a live stream AVFoundation
+    /// paused by itself; `resumeWhenPaused` decides which one to assume.
     var looksHealthyButIdle: Bool
     /// Wall-clock seconds since `currentTime()` last moved forward.
     var secondsSinceProgress: TimeInterval
@@ -172,6 +173,9 @@ class StreamViewModel: ObservableObject {
     @Published var isPlayingOnOpen: Bool = false
     @Published var retryTimeout: Double = 5.0
     @Published var autoResume: Bool = false
+    /// Whether a player sitting paused counts as stalled once it passes the stall
+    /// threshold. Only consulted when `autoResume` is on. See `recoveryDecision`.
+    @Published var resumeWhenPaused: Bool = true
     @Published var settingsDisabled: Bool = false
     @Published var channelPresets: [ChannelPreset] = []
     @Published var channelPresetsManaged: Bool = false
@@ -230,6 +234,7 @@ class StreamViewModel: ObservableObject {
     /// mode that matters to an unattended display.
     static func recoveryDecision(for snapshot: PlaybackSnapshot,
                                  autoResume: Bool,
+                                 resumeWhenPaused: Bool,
                                  stoppedByUser: Bool,
                                  stallThreshold: TimeInterval,
                                  secondsSinceLastReload: TimeInterval = .infinity) -> PlaybackRecovery {
@@ -252,10 +257,25 @@ class StreamViewModel: ObservableObject {
         if !snapshot.hasItem { return .reload(reason: "no player item") }
         if snapshot.itemFailed { return .reload(reason: "player item failed") }
 
-        // Idle but healthy means somebody pressed pause in the player, which is a
-        // resting state rather than a freeze. A stalled player is *also* reported as
-        // paused, which is why this needs the item's health and not just its status.
-        if snapshot.looksHealthyButIdle { return .leaveAlone }
+        // Idle but healthy: paused, item ready, buffer not empty. That is what a press
+        // of pause on the remote looks like - and ALSO what a live stream looks like
+        // after AVFoundation pauses it by itself, because the playlist stopped handing
+        // it new segments while it still held old ones. Seen 2026-09-28: when the
+        // relay swapped every channel to a maintenance slate and back, displays kept
+        // polling the playlist without fetching a segment until tvOS put them on the
+        // screensaver - which it does for a paused player, not a waiting one. This
+        // rule leaving them alone is the most likely reason they never recovered.
+        // Nothing here can tell the two pauses apart.
+        //
+        // So it is a setting. With resumeWhenPaused, any pause that outlasts the stall
+        // threshold is repaired like a freeze; without it, a pause is left alone.
+        if snapshot.looksHealthyButIdle {
+            guard resumeWhenPaused else { return .leaveAlone }
+            if snapshot.secondsSinceProgress >= stallThreshold {
+                return .reload(reason: "paused for \(Int(snapshot.secondsSinceProgress))s")
+            }
+            return .leaveAlone
+        }
 
         if snapshot.secondsSinceProgress >= stallThreshold {
             return .reload(reason: "stalled for \(Int(snapshot.secondsSinceProgress))s")
@@ -300,6 +320,17 @@ class StreamViewModel: ObservableObject {
         self.viewOnlyMode = defaults.bool(forKey: ContentView.viewOnlyModeKey)
         self.settingsPIN = defaults.string(forKey: ContentView.settingsPINKey) ?? ""
         self.settingsPINManaged = defaults.bool(forKey: ContentView.settingsPINManagedKey)
+
+        // Defaults to ON, seeded like confirmBeforeDelete below. On because this is a
+        // kiosk player first: an unattended display has nobody who could have paused it,
+        // and AVFoundation pausing a live stream by itself is what left displays on the
+        // screensaver. Only takes effect with Auto Resume, which is itself opt-in.
+        if defaults.object(forKey: ContentView.resumeWhenPausedKey) == nil {
+            defaults.set(true, forKey: ContentView.resumeWhenPausedKey)
+            self.resumeWhenPaused = true
+        } else {
+            self.resumeWhenPaused = defaults.bool(forKey: ContentView.resumeWhenPausedKey)
+        }
 
         // Defaults to ON. bool(forKey:) yields false for a missing key, so the
         // absent case has to be seeded explicitly rather than read.
@@ -601,6 +632,12 @@ class StreamViewModel: ObservableObject {
         return true
     }
 
+    func updateResumeWhenPaused(_ enabled: Bool) {
+        resumeWhenPaused = enabled
+        UserDefaults.standard.set(enabled, forKey: ContentView.resumeWhenPausedKey)
+        logRecoveryConfiguration("settings changed")
+    }
+
     func updateConfirmBeforeDelete(_ enabled: Bool) {
         confirmBeforeDelete = enabled
         UserDefaults.standard.set(enabled, forKey: ContentView.confirmBeforeDeleteKey)
@@ -680,6 +717,7 @@ class StreamViewModel: ObservableObject {
     /// between "the watchdog is off" and a mystery.
     private func logRecoveryConfiguration(_ context: String) {
         logger.log("Recovery config (\(context)): autoResume=\(autoResume) "
+                   + "resumeWhenPaused=\(resumeWhenPaused) "
                    + "retryTimeout=\(retryTimeout)s stallThreshold=\(stallThreshold)s "
                    + "playOnAppOpen=\(isPlayingOnOpen)")
     }
@@ -746,10 +784,11 @@ class StreamViewModel: ObservableObject {
                      + "idleHealthy=\(snapshot.looksHealthyButIdle) "
                      + "sinceProgress=\(String(format: "%.1f", snapshot.secondsSinceProgress))s "
                      + "sinceReload=\(sinceReload.isFinite ? String(format: "%.1f", sinceReload) : "never") "
-                     + "autoResume=\(autoResume) stopped=\(playbackStoppedByUser) "
+                     + "autoResume=\(autoResume) resumeWhenPaused=\(resumeWhenPaused) stopped=\(playbackStoppedByUser) "
                      + "threshold=\(stallThreshold)s")
         switch StreamViewModel.recoveryDecision(for: snapshot,
                                                 autoResume: autoResume,
+                                                resumeWhenPaused: resumeWhenPaused,
                                                 stoppedByUser: playbackStoppedByUser,
                                                 stallThreshold: stallThreshold,
                                                 secondsSinceLastReload: sinceReload) {

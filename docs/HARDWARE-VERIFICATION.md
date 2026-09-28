@@ -118,6 +118,30 @@ Note the log line `Auto-resuming stream (no player item)` fires on one specific 
 Recovery from a *stalled* item goes through the stall branch instead — do not read its
 absence as nothing having happened.
 
+## 4a. A paused stream is resumed — Resume When Paused
+
+A live stream whose playlist stops advancing can be paused by AVFoundation itself, with a
+ready item and a full buffer: the same state as a press of pause, and before this setting
+it was left alone until the screensaver came on. The verify payload sets `RetryTimeout`
+7s, so the stall threshold is `max(15, 7 × 3)` = **21 seconds**.
+
+1. With `Resume When Paused` **on** (the default), start playback and press pause on the
+   remote. Touch nothing.
+
+   **Pass:** playback restarts on its own about 21 seconds later, well before the
+   screensaver. The log shows `Auto-resuming stream (paused for 21s)` or similar.
+
+2. Turn it **off** in Settings → Recovery, and pause again.
+
+   **Pass:** it stays paused. A pause is respected however long it lasts.
+
+3. With it on again, and with access to the stream-relay maintenance switch: run
+   `maintenance.yml -f action=on`, wait a minute, then `-f action=off`.
+
+   **Pass:** the display shows the slate, then returns to the channel on its own within
+   a stall threshold of the switch back. This is the case that left displays on the
+   screensaver on 2026-09-28.
+
 ## 5. The kiosk lockdown
 
 Swap the App Configuration to [`../mdm/jamf-app-config-kiosk.xml`](../mdm/jamf-app-config-kiosk.xml).
