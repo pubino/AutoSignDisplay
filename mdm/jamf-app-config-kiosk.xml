@@ -19,6 +19,9 @@
   <key>AutoResume</key>
   <true/>
 
+  <key>ResumeWhenPaused</key>
+  <true/>
+
   <!-- Disables the Settings link outright. Note what this does to SettingsPIN, below. -->
   <key>SettingsDisabled</key>
   <true/>

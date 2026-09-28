@@ -60,6 +60,9 @@
   <key>AutoResume</key>
   <true/>
 
+  <key>ResumeWhenPaused</key>
+  <true/>
+
   <!-- 7 is deliberately not one of the values the Settings screen offers (3, 5, 10,
        15, 30, 60). If the UI displays 7s, the payload is being honored. -->
   <key>RetryTimeout</key>

@@ -30,6 +30,11 @@
     <key>AutoResume</key>
     <true/>
 
+    <!-- Boolean: with AutoResume, also restart a stream that stays paused past the
+         stall threshold. Defaults to true. -->
+    <key>ResumeWhenPaused</key>
+    <true/>
+
     <!-- Number (real): retry interval in seconds used by the app retry timer (optional) -->
     <key>RetryTimeout</key>
     <real>5.0</real>

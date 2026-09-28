@@ -67,6 +67,7 @@ The app implements a small set of focused features for playing and managing HLS 
 - Channel presets: manage up to 20 saved streams, each with an optional name and a required URL. When a name is set it shows in the Stream Presets list instead of the raw URL. Presets can be locked down via managed configuration.
 - Play-on-open: enable or disable "Play on App Open" so the app will automatically play the last-used URL on launch.
 - Auto-resume: enable and display an "Auto Resume on Network Interrupt" option so the player will attempt to resume playback after transient network interruptions.
+- Resume when paused: with Auto Resume on, a stream that stays paused past the stall threshold is restarted too (Settings → Recovery, or `ResumeWhenPaused`). On by default, because a stalled live stream can look exactly like a paused one.
 - Retry timeout: how long to wait before retrying a stalled stream.
 - Managed App Config: all user-facing options are also configurable via MDM/managed app configuration (see `AutoSignDisplay/ManagedAppConfig.example.plist` and `AppConfig.applyConfiguration()`).
 

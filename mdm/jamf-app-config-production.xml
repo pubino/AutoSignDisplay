@@ -62,6 +62,9 @@
   <key>AutoResume</key>
   <true/>
 
+  <key>ResumeWhenPaused</key>
+  <true/>
+
   <!-- Preset list is the only control. -->
   <key>ViewOnlyMode</key>
   <true/>

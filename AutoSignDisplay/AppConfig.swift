@@ -16,6 +16,7 @@ struct AppConfigKeys {
     static let retryTimeout = "RetryTimeout"
     static let streamURL = "StreamURL"
     static let autoResume = "AutoResume"
+    static let resumeWhenPaused = "ResumeWhenPaused"
     static let settingsDisabled = "SettingsDisabled"
     static let channelPresets = "ChannelPresets"
     static let defaultChannel = "DefaultChannel"
@@ -47,6 +48,7 @@ class AppConfig {
                 // leaves the user unable to reach Settings in unmanaged mode.
                 defaults.removeObject(forKey: ContentView.playOnOpenKey)
                 defaults.removeObject(forKey: ContentView.autoResumeKey)
+                defaults.removeObject(forKey: ContentView.resumeWhenPausedKey)
                 defaults.removeObject(forKey: ContentView.settingsDisabledKey)
                 defaults.removeObject(forKey: ContentView.retryTimeoutKey)
                 defaults.removeObject(forKey: ContentView.displayTitleKey)
@@ -190,6 +192,26 @@ class AppConfig {
                 logger.log("Applied managed AutoResume: \(boolValue)")
             } else {
                 logger.log("Ignored invalid AutoResume (must be Boolean, got \(type(of: autoResumeValue)))")
+            }
+        }
+
+        // Validate and apply ResumeWhenPaused (must be Boolean). Same NSNumber-first
+        // guard as AutoResume: <integer>0</integer> would otherwise read as false and
+        // quietly switch off recovery on every display the payload reaches.
+        if let resumeWhenPausedValue = managedConfig[AppConfigKeys.resumeWhenPaused] {
+            if let numValue = resumeWhenPausedValue as? NSNumber {
+                let objCTypeStr = String(cString: numValue.objCType)
+                if objCTypeStr == "c" {
+                    defaults.set(numValue.boolValue, forKey: ContentView.resumeWhenPausedKey)
+                    logger.log("Applied managed ResumeWhenPaused (CFBoolean): \(numValue.boolValue)")
+                } else {
+                    logger.log("Ignored invalid ResumeWhenPaused (NSNumber with objCType '\(objCTypeStr)', must be Boolean)")
+                }
+            } else if let boolValue = resumeWhenPausedValue as? Bool {
+                defaults.set(boolValue, forKey: ContentView.resumeWhenPausedKey)
+                logger.log("Applied managed ResumeWhenPaused: \(boolValue)")
+            } else {
+                logger.log("Ignored invalid ResumeWhenPaused (must be Boolean, got \(type(of: resumeWhenPausedValue)))")
             }
         }
 

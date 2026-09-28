@@ -15,6 +15,11 @@
     <key>AutoResume</key>
     <integer>1</integer>
 
+    <!-- ResumeWhenPaused should be Boolean, not Integer. 0, because a wrongly
+         accepted 0 would silently switch recovery off. -->
+    <key>ResumeWhenPaused</key>
+    <integer>0</integer>
+
     <!-- ChannelPresets should be Array of Strings, contains an Integer -->
     <key>ChannelPresets</key>
     <array>

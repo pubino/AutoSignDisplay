@@ -30,6 +30,11 @@
   <key>AutoResume</key>
   <true/>
 
+  <!-- Boolean. With AutoResume, also rebuild a stream that stays paused past the stall
+       threshold. Defaults to true; set false to let viewers pause. -->
+  <key>ResumeWhenPaused</key>
+  <true/>
+
   <!-- Boolean. Reduce the main screen to the preset list: no stream URL entry,
        no Play/Clear, no preset management. Pressing a preset plays it. Intended
        for displays a local user may re-point but must not reconfigure. -->

@@ -48,6 +48,7 @@ struct AutoSignDisplayTests {
                 ContentView.playOnOpenKey, "playOnAppOpen", "PlayOnAppOpen",
                 ContentView.retryTimeoutKey, "retryTimeout", "RetryTimeout",
                 ContentView.autoResumeKey, "autoResume", "AutoResume",
+                ContentView.resumeWhenPausedKey, "resumeWhenPaused", "ResumeWhenPaused",
                 ContentView.settingsDisabledKey, "settingsDisabled", "SettingsDisabled",
                 ContentView.channelPresetsKey, "channelPresets", "ChannelPresets",
                 ContentView.channelPresetsManagedKey, "channelPresetsManaged", "ChannelPresetsManaged",
@@ -501,6 +502,7 @@ struct AutoSignDisplayTests {
         // Verify all settings were applied
         #expect(defaults.bool(forKey: ContentView.playOnOpenKey) == true)
         #expect(defaults.bool(forKey: ContentView.autoResumeKey) == true)
+        #expect(defaults.object(forKey: ContentView.resumeWhenPausedKey) as? Bool == false)
         #expect(defaults.double(forKey: ContentView.retryTimeoutKey) == 5.0)
         #expect(defaults.string(forKey: ContentView.lastStreamURLKey) == "https://test.example.com/stream.m3u8")
 
@@ -530,6 +532,9 @@ struct AutoSignDisplayTests {
 
         // AutoResume as Integer should be ignored
         #expect(defaults.object(forKey: ContentView.autoResumeKey) == nil)
+
+        // ResumeWhenPaused as Integer should be ignored
+        #expect(defaults.object(forKey: ContentView.resumeWhenPausedKey) == nil)
 
         // DefaultChannel as Array should be ignored
         #expect(defaults.object(forKey: ContentView.defaultChannelKey) == nil)
@@ -923,6 +928,77 @@ struct AutoSignDisplayTests {
         #expect(vm.channelPresets[0].name == "Homepage")
         #expect(vm.channelPresets[0].url == "https://a.example.com/1.m3u8")
         vm.stopRetryTimer()
+    }
+
+    // MARK: - Resume When Paused
+
+    @Test func resumeWhenPausedDefaultsOnAndPersists() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
+
+        // On with nothing stored - and seeded, so the stored value and the UI agree.
+        var vm = await MainActor.run { makeVM() }
+        #expect(vm.resumeWhenPaused == true)
+        #expect(defaults.object(forKey: ContentView.resumeWhenPausedKey) as? Bool == true)
+
+        await MainActor.run { vm.updateResumeWhenPaused(false) }
+        #expect(defaults.bool(forKey: ContentView.resumeWhenPausedKey) == false)
+
+        vm.stopRetryTimer()
+        vm = await MainActor.run { makeVM() }
+        #expect(vm.resumeWhenPaused == false, "a stored false was overwritten by the default")
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedResumeWhenPausedRejectsIntegerBoolean() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        await MainActor.run {
+            defaults.set([AppConfigKeys.resumeWhenPaused: false],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.resumeWhenPausedKey) as? Bool == false)
+
+        // NSNumber(0) casts to Bool in Swift. Accepted, it would switch recovery off on
+        // every display the payload reaches, from a typo in an MDM editor.
+        await resetDefaults()
+        await MainActor.run {
+            defaults.set([AppConfigKeys.resumeWhenPaused: NSNumber(value: 0)],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.resumeWhenPausedKey) == nil)
+
+        // Rejected means the default holds.
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.resumeWhenPaused == true)
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedConfigRemovalClearsResumeWhenPaused() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        await MainActor.run {
+            defaults.set(
+                [AppConfigKeys.resumeWhenPaused: false,
+                 AppConfigKeys.channelPresets: [["Name": "A", "URL": "https://a.example/1.m3u8"]]],
+                forKey: "com.apple.configuration.managed"
+            )
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.resumeWhenPausedKey) as? Bool == false)
+
+        await MainActor.run {
+            defaults.removeObject(forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.resumeWhenPausedKey) == nil,
+                "an administrator's false outlived the payload that set it")
     }
 
     // MARK: - View Only Mode

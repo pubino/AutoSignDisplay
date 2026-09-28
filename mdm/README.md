@@ -94,6 +94,7 @@ a partial payload manages only what it names.
 | `SettingsPIN` | String | Require this PIN to open Settings. At least 6 characters. |
 | `PlayOnAppOpen` | Boolean | Begin playback at launch. |
 | `AutoResume` | Boolean | Rebuild the player when a stream stalls or the network drops. |
+| `ResumeWhenPaused` | Boolean | With `AutoResume`, also rebuild a stream that stays paused past the stall threshold. Defaults to `true`. |
 | `SettingsDisabled` | Boolean | Lock the on-device Settings screen. |
 | `RetryTimeout` | Real | Seconds before retrying a stalled stream. Must be positive; non-positive values are rejected. |
 | `StreamURL` | String | Stream to load. Must be non-empty. Takes precedence over `DefaultChannel`. |
@@ -218,10 +219,18 @@ CFBoolean. If a Boolean setting seems to be ignored, check that your MDM emitted
 `<true/>` rather than `<integer>1</integer>` — some editors substitute one for the
 other.
 
-This applies to `PlayOnAppOpen`, `AutoResume`, `SettingsDisabled`, and
-`ViewOnlyMode`.
+This applies to `PlayOnAppOpen`, `AutoResume`, `ResumeWhenPaused`,
+`SettingsDisabled`, and `ViewOnlyMode`.
 
 ## Behavior notes
+
+- **`ResumeWhenPaused` exists because a stalled live stream can look paused.** When an
+  HLS playlist stops handing out new segments, AVFoundation may pause the player with a
+  ready item and a full buffer — exactly what a press of pause looks like. With this off,
+  such a display sits paused until tvOS shows the screensaver. With it on (the default),
+  any pause that outlasts the stall threshold — `max(15, RetryTimeout × 3)` seconds — is
+  rebuilt like a freeze, including a deliberate one from the remote. Turn it off only
+  where viewers are expected to pause. It does nothing unless `AutoResume` is on.
 
 - **`DisplayTitle` is useful for telling displays apart.** Pushing the location a
   screen serves — `Engineering Quad — Lobby` — means a technician can identify a

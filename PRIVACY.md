@@ -25,7 +25,7 @@ To function, the app writes the following to Apple's `UserDefaults` on the devic
 
 - The list of stream presets (name and URL of each preset).
 - The currently selected stream URL.
-- Preference toggles: "Play on App Open", "Auto Resume on Network Interrupt", "Retry Timeout".
+- Preference toggles: "Play on App Open", "Auto Resume on Network Interrupt", "Retry Timeout", "Resume When Paused".
 - A flag recording whether stream presets and settings were provisioned by Managed App Configuration.
 
 You can remove all locally stored data at any time by uninstalling the app from the Apple TV.

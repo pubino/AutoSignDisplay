@@ -308,6 +308,7 @@ struct SettingsGateView: View {
             isPlayingOnOpen: $viewModel.isPlayingOnOpen,
             retryTimeout: $viewModel.retryTimeout,
             autoResume: $viewModel.autoResume,
+            resumeWhenPaused: $viewModel.resumeWhenPaused,
             settingsDisabled: $viewModel.settingsDisabled,
             confirmBeforeDelete: $viewModel.confirmBeforeDelete,
             displayTitle: $viewModel.displayTitle,
@@ -323,6 +324,7 @@ struct SettingsGateView: View {
                     settingsDisabled: viewModel.settingsDisabled
                 )
             },
+            onResumeWhenPausedChanged: { viewModel.updateResumeWhenPaused($0) },
             onConfirmBeforeDeleteChanged: { viewModel.updateConfirmBeforeDelete($0) },
             onDisplayTitleChanged: { viewModel.updateDisplayTitle($0) },
             onViewOnlyModeChanged: { viewModel.updateViewOnlyMode($0) },
@@ -340,6 +342,7 @@ struct SettingsView: View {
     @Binding var isPlayingOnOpen: Bool
     @Binding var retryTimeout: Double
     @Binding var autoResume: Bool
+    @Binding var resumeWhenPaused: Bool
     @Binding var settingsDisabled: Bool
     @Binding var confirmBeforeDelete: Bool
     @Binding var displayTitle: String
@@ -353,6 +356,7 @@ struct SettingsView: View {
     /// nothing to act on and is hidden entirely rather than shown disabled.
     var channelPresetsManaged: Bool
     var onRetryTimeoutChanged: () -> Void
+    var onResumeWhenPausedChanged: (Bool) -> Void
     var onConfirmBeforeDeleteChanged: (Bool) -> Void
     var onDisplayTitleChanged: (String) -> Void
     var onViewOnlyModeChanged: (Bool) -> Void
@@ -431,6 +435,20 @@ struct SettingsView: View {
                     }
 
                     Text("How long to wait before retrying a stalled stream.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    // Disabled rather than hidden when Auto Resume is off: it has no
+                    // effect then, and showing it greyed says so.
+                    SettingToggleRow(
+                        title: "Resume When Paused",
+                        isOn: $resumeWhenPaused,
+                        disabled: settingsDisabled || !autoResume
+                    ) { newValue in
+                        onResumeWhenPausedChanged(newValue)
+                    }
+
+                    Text("Restart a stream that stays paused past the stall threshold, whether it was paused on the remote or stopped by itself. Needs Auto Resume.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

@@ -84,6 +84,7 @@ struct ContentView: View {
     static let retryTimeoutKey = "retryTimeout"
     static let lastStreamURLKey = "lastStreamURL"
     static let autoResumeKey = "autoResume"
+    static let resumeWhenPausedKey = "resumeWhenPaused"
     static let settingsDisabledKey = "settingsDisabled"
     static let channelPresetsKey = "channelPresets"
     static let defaultChannelKey = "defaultChannel"
